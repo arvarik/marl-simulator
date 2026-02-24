@@ -8,7 +8,7 @@ import type { AgentState, Order, SimulationState } from './types';
  * @param quantity The number of contracts.
  * @returns A structured Order object.
  */
-const createOrder = (agentId: string, side: 1 | -1, price: number, quantity: number): Order => ({
+export const createOrder = (agentId: string, side: 1 | -1, price: number, quantity: number): Order => ({
   agentId,
   side,
   price,

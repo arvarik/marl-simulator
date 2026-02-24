@@ -6,7 +6,9 @@ import {
 } from 'recharts';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
-function EpochLogItem({ log }: { log: any }) {
+import type { EpochLog } from './types';
+
+function EpochLogItem({ log }: { log: EpochLog }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="bg-zinc-950/50 rounded border border-white/5 flex-shrink-0">
@@ -25,7 +27,7 @@ function EpochLogItem({ log }: { log: any }) {
       </button>
       {isOpen && (
         <div className="p-2 border-t border-white/5 flex flex-col gap-1.5 bg-black/20">
-          {log.actions.length > 0 ? log.actions.map((action: any, i: number) => (
+          {log.actions.length > 0 ? log.actions.map((action, i: number) => (
             <div key={i} className="text-[10px] font-mono grid grid-cols-[80px_1fr] gap-2">
               <span className="text-zinc-500 truncate">{action.agentId}</span>
               <span className={action.action.includes('MARGIN CALL') ? 'text-rose-400' : 'text-zinc-300'}>{action.action}</span>
@@ -195,7 +197,7 @@ export function SimulationDashboard() {
         </h3>
         {/* We use a vertical flex container that scrolls vertically */}
         <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 scrollbar-thin">
-          {logs.map((log: any) => (
+          {logs.map((log: EpochLog) => (
             <EpochLogItem key={log.epoch} log={log} />
           ))}
           {logs.length === 0 && (

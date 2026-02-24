@@ -1,18 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useStore } from './store';
 import { Play, Pause, StepForward, RotateCcw, BookOpen, Activity, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, BookA } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from './utils';
 import { AgentConfigurations } from './AgentConfigurations';
 import { getAllAgentOrders } from './agents';
 import { SimulationDashboard } from './SimulationDashboard';
 import { ScenarioDeck } from './ScenarioDeck';
 import { QuantAcademy } from './QuantAcademy';
 import { Glossary } from './Glossary';
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 function App() {
   const store = useStore();
@@ -54,9 +49,9 @@ function App() {
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
             QuantSim: MARL Synthetic Economy
           </h1>
-          
+
           <div className="h-6 w-px bg-white/10"></div>
-          
+
           {/* Toggle View */}
           <div className="flex gap-2">
             <button
@@ -98,7 +93,7 @@ function App() {
           </div>
 
           <div className="h-6 w-px bg-white/10"></div>
-          
+
           {/* Metrics */}
           <div className="flex items-center gap-6 text-sm font-mono">
             <div className="flex flex-col">
@@ -114,14 +109,14 @@ function App() {
 
         {/* Global Playback Controls */}
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={resetSimulation}
             className="p-2 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5"
             title="Reset Simulation"
           >
             <RotateCcw size={18} />
           </button>
-          <button 
+          <button
             onClick={handleStepEpoch}
             className="p-2 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5"
             title="Step +1 Epoch"
@@ -129,12 +124,12 @@ function App() {
           >
             <StepForward size={18} />
           </button>
-          <button 
+          <button
             onClick={toggleSimulation}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-md transition-colors font-medium text-sm",
-              isRunning 
-                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30" 
+              isRunning
+                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30"
                 : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
             )}
           >
@@ -152,7 +147,7 @@ function App() {
           </button>
 
           <div className="h-6 w-px bg-white/10 mx-1"></div>
-          
+
           <button
             onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
             className="p-1.5 -mr-2 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
