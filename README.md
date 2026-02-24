@@ -6,6 +6,8 @@ At its core, QuantSim is a digital playground where distinct AI traders (agents)
 
 Whether you are a student of economics, a software engineer interested in fintech, or just someone curious about why stock prices flash crash, this tool is designed to make complex market dynamics visual, interactive, and understandable.
 
+<img width="1685" height="1303" alt="image" src="https://github.com/user-attachments/assets/8491ec14-fe51-4192-8030-18732f3d9707" />
+
 ---
 
 ## 🚀 Installation & Configuration
