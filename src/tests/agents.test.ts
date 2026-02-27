@@ -130,7 +130,6 @@ describe('Momentum Agent Strategy', () => {
         // history[1] = 100 (if history is [90, 100, ...])
 
         // Let's construct a specific state for clarity
-        const history = [100, 100, 100, 100, 100, 100];
         // We want pastPrice (index 0 for lookback 5) to be 100.
         // currentPrice 110.
         // derivative = 110 - 100 = 10 > threshold 2.
