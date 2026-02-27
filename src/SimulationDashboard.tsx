@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useStore } from './store';
 import { getAllAgentOrders } from './agents';
 import {
@@ -7,6 +7,16 @@ import {
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import type { EpochLog } from './types';
+
+interface WealthDataPoint {
+  epoch: number;
+  Prospector: number;
+  Rationalist: number;
+  Momentum: number;
+  MeanRevertor: number;
+  MarketMaker: number;
+  NoiseTrader: number;
+}
 
 function EpochLogItem({ log }: { log: EpochLog }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -59,13 +69,44 @@ export function SimulationDashboard() {
 
   const rationalistIntrinsicValue = agents['Rationalist']?.params.intrinsicValue || 100;
 
-  // 2. Wealth Race Data
+  // 2. Wealth Race Data (Optimized with incremental updates)
+  const cachedWealthData = useRef<WealthDataPoint[]>([]);
+
   const wealthData = useMemo(() => {
     // We assume all agents have the same wealthHistory length
     const length = wealthHistory['Prospector']?.length || 0;
-    const data = [];
-    for (let i = 0; i < length; i++) {
-      data.push({
+    const cache = cachedWealthData.current;
+
+    // Check if we need to invalidate the cache.
+    // Invalidation occurs if:
+    // 1. The history length is smaller than the cache (reset occurred)
+    // 2. The first item in history doesn't match the first item in cache (different simulation loaded)
+    let shouldReset = length < cache.length;
+
+    if (!shouldReset && cache.length > 0 && length > 0) {
+      // Check first item to detect simulation swap
+      if (cache[0].Prospector !== (wealthHistory['Prospector']?.[0] || 0)) {
+        shouldReset = true;
+      }
+    }
+
+    // Also check the last cached item to ensure historical data hasn't changed under our feet
+    // (e.g. if we replaced a simulation with another of same length but different data)
+    if (!shouldReset && cache.length > 0 && length >= cache.length) {
+       const lastIdx = cache.length - 1;
+       if (cache[lastIdx].Prospector !== (wealthHistory['Prospector']?.[lastIdx] || 0)) {
+          shouldReset = true;
+       }
+    }
+
+    if (shouldReset) {
+      cachedWealthData.current = [];
+    }
+
+    // Append only new items
+    const currentCache = cachedWealthData.current;
+    for (let i = currentCache.length; i < length; i++) {
+      currentCache.push({
         epoch: i,
         Prospector: wealthHistory['Prospector']?.[i] || 0,
         Rationalist: wealthHistory['Rationalist']?.[i] || 0,
@@ -75,7 +116,9 @@ export function SimulationDashboard() {
         NoiseTrader: wealthHistory['NoiseTrader']?.[i] || 0,
       });
     }
-    return data;
+
+    // Return a shallow copy so Recharts detects the change
+    return [...currentCache];
   }, [wealthHistory]);
 
   // 3. Market Depth / LOB (Top 5 Bids and Asks)
