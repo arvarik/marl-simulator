@@ -6,6 +6,35 @@ export interface EngineResult {
 }
 
 export const MAX_LOG_HISTORY = 50;
+// Helper function for updating average entry
+const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
+    const isBuying = qty > 0;
+    const isLong = agent.inventory > 0;
+    const isShort = agent.inventory < 0;
+
+    agent.cash -= qty * price;
+
+    if (agent.inventory === 0) {
+        // Opening new position
+        agent.inventory = qty;
+        agent.avgEntry = price;
+    } else if ((isLong && isBuying) || (isShort && !isBuying)) {
+        // Adding to existing position
+        const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
+        agent.inventory += qty;
+        agent.avgEntry = totalCost / Math.abs(agent.inventory);
+    } else {
+        // Reducing existing position
+        agent.inventory += qty;
+        // If position flipped from long to short or short to long
+        if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
+            agent.avgEntry = price; // The flipped portion is at the new price
+        } else if (agent.inventory === 0) {
+            agent.avgEntry = 0;
+        }
+        // If just reduced but not flipped, avgEntry remains unchanged
+    }
+};
 
 /**
  * Pure function that processes a single epoch of the continuous double auction market.
@@ -19,7 +48,10 @@ export function processEpoch(
 ): EngineResult {
     const currentEpochLogs: AgentActionLog[] = [];
 
-    orders.forEach(o => {
+    // Filter out invalid orders (quantity <= 0)
+    const validOrders = orders.filter(o => o.quantity > 0);
+
+    validOrders.forEach(o => {
         currentEpochLogs.push({
             agentId: o.agentId,
             action: `Placed ${o.side === 1 ? 'Bid' : 'Ask'} for ${o.quantity} units at $${o.price.toFixed(2)}`
@@ -28,8 +60,8 @@ export function processEpoch(
 
     // Separate incoming orders into bids (side: 1) and asks (side: -1).
     // Sort: bids descending by price, asks ascending by price.
-    const bids = orders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
-    const asks = orders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
+    const bids = validOrders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
+    const asks = validOrders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
 
     let currentPrice = currentState.currentPrice;
 
@@ -56,36 +88,6 @@ export function processEpoch(
             agentId: ask.agentId,
             action: `Sold ${executedQuantity} units at $${clearingPrice.toFixed(2)}`
         });
-
-        // Helper function for updating average entry
-        const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
-            const isBuying = qty > 0;
-            const isLong = agent.inventory > 0;
-            const isShort = agent.inventory < 0;
-
-            agent.cash -= qty * price;
-
-            if (agent.inventory === 0) {
-                // Opening new position
-                agent.inventory = qty;
-                agent.avgEntry = price;
-            } else if ((isLong && isBuying) || (isShort && !isBuying)) {
-                // Adding to existing position
-                const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
-                agent.inventory += qty;
-                agent.avgEntry = totalCost / Math.abs(agent.inventory);
-            } else {
-                // Reducing existing position
-                agent.inventory += qty;
-                // If position flipped from long to short or short to long
-                if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
-                    agent.avgEntry = price; // The flipped portion is at the new price
-                } else if (agent.inventory === 0) {
-                    agent.avgEntry = 0;
-                }
-                // If just reduced but not flipped, avgEntry remains unchanged
-            }
-        };
 
         // Settle
         const buyer = nextAgents[bid.agentId];

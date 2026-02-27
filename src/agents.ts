@@ -113,10 +113,18 @@ export const getMeanRevertorOrders = (marketState: SimulationState, internalStat
   const windowSize = Math.min(Math.floor(smaWindow), history.length);
   if (windowSize <= 1) return [];
 
-  const slice = history.slice(-windowSize);
-  const mean = slice.reduce((a, b) => a + b, 0) / windowSize;
+  const startIndex = history.length - windowSize;
+  let sum = 0;
+  for (let i = startIndex; i < history.length; i++) {
+    sum += history[i];
+  }
+  const mean = sum / windowSize;
 
-  const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / windowSize;
+  let varianceSum = 0;
+  for (let i = startIndex; i < history.length; i++) {
+    varianceSum += Math.pow(history[i] - mean, 2);
+  }
+  const variance = varianceSum / windowSize;
   const stdDev = Math.sqrt(variance) || 1; // avoid div by 0
 
   const zScore = (currentPrice - mean) / stdDev;
