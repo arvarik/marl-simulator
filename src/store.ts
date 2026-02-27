@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { AgentState, SimulationState, Order } from './types';
+import type { AgentState, SimulationState } from './types';
 import { processEpoch } from './engine';
+import { getAllAgentOrders } from './agents';
 
 /**
  * The unified global state, combining simulation properties, agent states, and state-mutating actions.
@@ -14,8 +15,8 @@ interface GlobalState extends SimulationState {
   toggleSimulation: () => void;
   /** Updates a specific parameter of the simulation state. */
   updateSimulationParam: (paramName: keyof SimulationState, value: number) => void;
-  /** Advances the simulation by one epoch, processing the given orders. */
-  stepEpoch: (orders: Order[]) => void;
+  /** Advances the simulation by one epoch, generating and processing orders internally. */
+  stepEpoch: () => void;
   /** Resets the simulation and all agents to their initial state. */
   resetSimulation: () => void;
   /** Sets the playback speed delay in milliseconds. */
@@ -68,7 +69,8 @@ export const useStore = create<GlobalState>((set) => ({
     [paramName]: value
   })),
 
-  stepEpoch: (orders: Order[]) => set((state) => {
+  stepEpoch: () => set((state) => {
+    const orders = getAllAgentOrders(state, state.agents);
     const { nextSimulationState, nextAgents } = processEpoch(state, state.agents, orders);
     return {
       ...nextSimulationState,
