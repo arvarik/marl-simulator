@@ -56,4 +56,36 @@ describe('processEpoch Matching Engine', () => {
         expect(result.nextAgents['Seller'].inventory).toBe(-10);
         expect(result.nextAgents['Seller'].avgEntry).toBe(100);
     });
+
+    it('logs detailed messages for single orders', () => {
+        const orders: Order[] = [
+            { agentId: 'Buyer', price: 101, quantity: 1, side: 1 },
+            { agentId: 'Seller', price: 99, quantity: 1, side: -1 }
+        ];
+
+        const result = processEpoch(baseSimState, baseAgents, orders);
+        const latestLog = result.nextSimulationState.logs[0];
+
+        // Should find "Placed Bid for..." and "Placed Ask for..."
+        const actions = latestLog.actions.map(a => a.action);
+        expect(actions).toContain('Placed Bid for 1 units at $101.00');
+        expect(actions).toContain('Placed Ask for 1 units at $99.00');
+    });
+
+    it('logs summary messages for multiple orders from the same agent', () => {
+        const orders: Order[] = [
+            { agentId: 'Buyer', price: 101, quantity: 1, side: 1 },
+            { agentId: 'Buyer', price: 102, quantity: 1, side: 1 },
+            { agentId: 'Seller', price: 99, quantity: 1, side: -1 },
+            { agentId: 'Seller', price: 98, quantity: 1, side: -1 }
+        ];
+
+        const result = processEpoch(baseSimState, baseAgents, orders);
+        const latestLog = result.nextSimulationState.logs[0];
+
+        // Should find "Placed 2 Bids" and "Placed 2 Asks"
+        const actions = latestLog.actions.map(a => a.action);
+        expect(actions).toContain('Placed 2 Bids');
+        expect(actions).toContain('Placed 2 Asks');
+    });
 });

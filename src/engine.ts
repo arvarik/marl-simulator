@@ -17,12 +17,52 @@ export function processEpoch(
 ): EngineResult {
     const currentEpochLogs: AgentActionLog[] = [];
 
-    orders.forEach(o => {
-        currentEpochLogs.push({
-            agentId: o.agentId,
-            action: `Placed ${o.side === 1 ? 'Bid' : 'Ask'} for ${o.quantity} units at $${o.price.toFixed(2)}`
-        });
-    });
+    // Aggregate orders to avoid excessive logging
+    const orderSummary = new Map<string, { bids: number; asks: number; lastBid?: Order; lastAsk?: Order }>();
+
+    for (let i = 0; i < orders.length; i++) {
+        const o = orders[i];
+        let summary = orderSummary.get(o.agentId);
+        if (!summary) {
+            summary = { bids: 0, asks: 0 };
+            orderSummary.set(o.agentId, summary);
+        }
+
+        if (o.side === 1) {
+            summary.bids++;
+            summary.lastBid = o;
+        } else {
+            summary.asks++;
+            summary.lastAsk = o;
+        }
+    }
+
+    // Generate logs from summary
+    for (const [agentId, summary] of orderSummary) {
+        if (summary.bids === 1 && summary.lastBid) {
+            currentEpochLogs.push({
+                agentId: agentId,
+                action: `Placed Bid for ${summary.lastBid.quantity} units at $${summary.lastBid.price.toFixed(2)}`
+            });
+        } else if (summary.bids > 1) {
+            currentEpochLogs.push({
+                agentId: agentId,
+                action: `Placed ${summary.bids} Bids`
+            });
+        }
+
+        if (summary.asks === 1 && summary.lastAsk) {
+            currentEpochLogs.push({
+                agentId: agentId,
+                action: `Placed Ask for ${summary.lastAsk.quantity} units at $${summary.lastAsk.price.toFixed(2)}`
+            });
+        } else if (summary.asks > 1) {
+            currentEpochLogs.push({
+                agentId: agentId,
+                action: `Placed ${summary.asks} Asks`
+            });
+        }
+    }
 
     // Separate incoming orders into bids (side: 1) and asks (side: -1).
     // Sort: bids descending by price, asks ascending by price.
