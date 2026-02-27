@@ -6,19 +6,59 @@ export interface EngineResult {
 }
 
 /**
- * Pure function that processes a single epoch of the continuous double auction market.
- * It matches Bids and Asks, updates agent inventories, settles mark-to-market wealth,
- * deducts borrowing costs, and executes margin calls.
+ * Updates an agent's cash, inventory, and average entry price based on a trade execution.
+ *
+ * @param agent The agent state to update.
+ * @param qty The quantity bought (positive) or sold (negative).
+ * @param price The execution price.
  */
-export function processEpoch(
-    currentState: SimulationState,
-    currentAgents: Record<string, AgentState>,
-    orders: Order[]
-): EngineResult {
-    const currentEpochLogs: AgentActionLog[] = [];
+export function updateAgentPosition(agent: AgentState, qty: number, price: number): void {
+    const isBuying = qty > 0;
+    const isLong = agent.inventory > 0;
+    const isShort = agent.inventory < 0;
 
+    agent.cash -= qty * price;
+
+    if (agent.inventory === 0) {
+        // Opening new position
+        agent.inventory = qty;
+        agent.avgEntry = price;
+    } else if ((isLong && isBuying) || (isShort && !isBuying)) {
+        // Adding to existing position
+        const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
+        agent.inventory += qty;
+        agent.avgEntry = totalCost / Math.abs(agent.inventory);
+    } else {
+        // Reducing existing position
+        agent.inventory += qty;
+        // If position flipped from long to short or short to long
+        if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
+            agent.avgEntry = price; // The flipped portion is at the new price
+        } else if (agent.inventory === 0) {
+            agent.avgEntry = 0;
+        }
+        // If just reduced but not flipped, avgEntry remains unchanged
+    }
+}
+
+/**
+ * Matches buy and sell orders using a continuous double auction mechanism.
+ *
+ * @param orders List of incoming orders.
+ * @param currentPrice The last market price.
+ * @param nextAgents The mutable map of agent states.
+ * @returns An object containing the generated logs and the new market price.
+ */
+function matchOrders(
+    orders: Order[],
+    currentPrice: number,
+    nextAgents: Record<string, AgentState>
+): { logs: AgentActionLog[]; newPrice: number } {
+    const logs: AgentActionLog[] = [];
+
+    // Log all placed orders
     orders.forEach(o => {
-        currentEpochLogs.push({
+        logs.push({
             agentId: o.agentId,
             action: `Placed ${o.side === 1 ? 'Bid' : 'Ask'} for ${o.quantity} units at $${o.price.toFixed(2)}`
         });
@@ -29,13 +69,7 @@ export function processEpoch(
     const bids = orders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
     const asks = orders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
 
-    let currentPrice = currentState.currentPrice;
-
-    // Deep clone agents to avoid mutating state directly
-    const nextAgents: Record<string, AgentState> = {};
-    for (const [key, agent] of Object.entries(currentAgents)) {
-        nextAgents[key] = { ...agent };
-    }
+    let price = currentPrice;
 
     // Match: While bids and asks exist and bids[0].price >= asks[0].price
     while (bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
@@ -46,44 +80,14 @@ export function processEpoch(
         const clearingPrice = (bid.price + ask.price) / 2.0;
         const executedQuantity = Math.min(bid.quantity, ask.quantity);
 
-        currentEpochLogs.push({
+        logs.push({
             agentId: bid.agentId,
             action: `Bought ${executedQuantity} units at $${clearingPrice.toFixed(2)}`
         });
-        currentEpochLogs.push({
+        logs.push({
             agentId: ask.agentId,
             action: `Sold ${executedQuantity} units at $${clearingPrice.toFixed(2)}`
         });
-
-        // Helper function for updating average entry
-        const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
-            const isBuying = qty > 0;
-            const isLong = agent.inventory > 0;
-            const isShort = agent.inventory < 0;
-
-            agent.cash -= qty * price;
-
-            if (agent.inventory === 0) {
-                // Opening new position
-                agent.inventory = qty;
-                agent.avgEntry = price;
-            } else if ((isLong && isBuying) || (isShort && !isBuying)) {
-                // Adding to existing position
-                const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
-                agent.inventory += qty;
-                agent.avgEntry = totalCost / Math.abs(agent.inventory);
-            } else {
-                // Reducing existing position
-                agent.inventory += qty;
-                // If position flipped from long to short or short to long
-                if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
-                    agent.avgEntry = price; // The flipped portion is at the new price
-                } else if (agent.inventory === 0) {
-                    agent.avgEntry = 0;
-                }
-                // If just reduced but not flipped, avgEntry remains unchanged
-            }
-        };
 
         // Settle
         const buyer = nextAgents[bid.agentId];
@@ -92,7 +96,7 @@ export function processEpoch(
         const seller = nextAgents[ask.agentId];
         if (seller) updateAgentPosition(seller, -executedQuantity, clearingPrice);
 
-        currentPrice = clearingPrice;
+        price = clearingPrice;
 
         // Deduct filled quantities
         bid.quantity -= executedQuantity;
@@ -103,8 +107,25 @@ export function processEpoch(
         if (ask.quantity <= 0) asks.shift();
     }
 
-    // Mark-to-Market wealth update, Borrow Fees, and Margin Calls
+    return { logs, newPrice: price };
+}
+
+/**
+ * Handles mark-to-market wealth updates, borrow fees for short positions, and margin calls.
+ *
+ * @param currentState The current simulation state.
+ * @param nextAgents The mutable map of agent states (after trading).
+ * @param currentPrice The current market price.
+ * @returns An object containing generated logs and the updated wealth history.
+ */
+function settleAccounts(
+    currentState: SimulationState,
+    nextAgents: Record<string, AgentState>,
+    currentPrice: number
+): { logs: AgentActionLog[]; nextWealthHistory: Record<string, number[]> } {
+    const logs: AgentActionLog[] = [];
     const nextWealthHistory: Record<string, number[]> = {};
+
     for (const id in nextAgents) {
         const agent = nextAgents[id];
 
@@ -128,7 +149,7 @@ export function processEpoch(
             // If cash buffer drops below required maintenance margin, force liquidate!
             if (agent.cash < maintenanceMargin) {
                 console.warn(`[MARGIN CALL] Agent ${id} liquidated at Epoch ${currentState.epoch + 1}!`);
-                currentEpochLogs.push({
+                logs.push({
                     agentId: id,
                     action: `[MARGIN CALL] Liquidated ${Math.abs(agent.inventory)} units at $${currentPrice.toFixed(2)}`
                 });
@@ -145,6 +166,35 @@ export function processEpoch(
         nextWealthHistory[id] = [...(currentState.wealthHistory[id] || []), agent.wealth];
     }
 
+    return { logs, nextWealthHistory };
+}
+
+/**
+ * Pure function that processes a single epoch of the continuous double auction market.
+ * It matches Bids and Asks, updates agent inventories, settles mark-to-market wealth,
+ * deducts borrowing costs, and executes margin calls.
+ */
+export function processEpoch(
+    currentState: SimulationState,
+    currentAgents: Record<string, AgentState>,
+    orders: Order[]
+): EngineResult {
+    // Deep clone agents to avoid mutating state directly
+    const nextAgents: Record<string, AgentState> = {};
+    for (const [key, agent] of Object.entries(currentAgents)) {
+        nextAgents[key] = { ...agent };
+    }
+
+    // 1. Match Orders
+    const matchResult = matchOrders(orders, currentState.currentPrice, nextAgents);
+    const currentPrice = matchResult.newPrice;
+
+    // 2. Settle Accounts (Borrow Fees, Margin Calls, Wealth Updates)
+    const settlementResult = settleAccounts(currentState, nextAgents, currentPrice);
+
+    // Combine logs
+    const currentEpochLogs = [...matchResult.logs, ...settlementResult.logs];
+
     const newLog: EpochLog = {
         epoch: currentState.epoch + 1,
         price: currentPrice,
@@ -159,7 +209,7 @@ export function processEpoch(
             epoch: currentState.epoch + 1,
             currentPrice,
             history: [...currentState.history, currentPrice],
-            wealthHistory: nextWealthHistory,
+            wealthHistory: settlementResult.nextWealthHistory,
             logs: nextLogs,
         },
         nextAgents
