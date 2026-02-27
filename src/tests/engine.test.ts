@@ -56,4 +56,26 @@ describe('processEpoch Matching Engine', () => {
         expect(result.nextAgents['Seller'].inventory).toBe(-10);
         expect(result.nextAgents['Seller'].avgEntry).toBe(100);
     });
+
+    it('truncates logs to keep only the last 50 entries', () => {
+        // Create 60 existing logs
+        const existingLogs = Array.from({ length: 60 }, (_, i) => ({
+            epoch: i,
+            price: 100,
+            actions: []
+        }));
+
+        const stateWithLogs: SimulationState = {
+            ...baseSimState,
+            logs: existingLogs
+        };
+
+        const result = processEpoch(stateWithLogs, baseAgents, []);
+
+        expect(result.nextSimulationState.logs.length).toBe(50);
+        // The newest log (epoch 1) should be at the beginning
+        expect(result.nextSimulationState.logs[0].epoch).toBe(baseSimState.epoch + 1);
+        // The second log should be the first of the previous logs (epoch 0)
+        expect(result.nextSimulationState.logs[1].epoch).toBe(0);
+    });
 });

@@ -5,6 +5,8 @@ export interface EngineResult {
     nextAgents: Record<string, AgentState>;
 }
 
+export const MAX_LOG_HISTORY = 50;
+
 /**
  * Pure function that processes a single epoch of the continuous double auction market.
  * It matches Bids and Asks, updates agent inventories, settles mark-to-market wealth,
@@ -152,7 +154,7 @@ export function processEpoch(
     };
 
     // Keep the last 50 logs to prevent memory bloat
-    const nextLogs = [newLog, ...currentState.logs].slice(0, 50);
+    const nextLogs = [newLog, ...currentState.logs].slice(0, MAX_LOG_HISTORY);
 
     return {
         nextSimulationState: {
