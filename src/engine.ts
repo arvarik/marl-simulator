@@ -17,7 +17,10 @@ export function processEpoch(
 ): EngineResult {
     const currentEpochLogs: AgentActionLog[] = [];
 
-    orders.forEach(o => {
+    // Filter out invalid orders (quantity <= 0)
+    const validOrders = orders.filter(o => o.quantity > 0);
+
+    validOrders.forEach(o => {
         currentEpochLogs.push({
             agentId: o.agentId,
             action: `Placed ${o.side === 1 ? 'Bid' : 'Ask'} for ${o.quantity} units at $${o.price.toFixed(2)}`
@@ -26,8 +29,8 @@ export function processEpoch(
 
     // Separate incoming orders into bids (side: 1) and asks (side: -1).
     // Sort: bids descending by price, asks ascending by price.
-    const bids = orders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
-    const asks = orders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
+    const bids = validOrders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
+    const asks = validOrders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
 
     let currentPrice = currentState.currentPrice;
 
