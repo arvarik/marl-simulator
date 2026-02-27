@@ -1,4 +1,5 @@
 import type { AgentState, Order, SimulationState } from './types';
+import { calculateStats } from './mathUtils';
 
 /**
  * Helper to generate an order object for the simulation engine.
@@ -114,10 +115,7 @@ export const getMeanRevertorOrders = (marketState: SimulationState, internalStat
   if (windowSize <= 1) return [];
 
   const slice = history.slice(-windowSize);
-  const mean = slice.reduce((a, b) => a + b, 0) / windowSize;
-
-  const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / windowSize;
-  const stdDev = Math.sqrt(variance) || 1; // avoid div by 0
+  const { mean, stdDev } = calculateStats(slice);
 
   const zScore = (currentPrice - mean) / stdDev;
 

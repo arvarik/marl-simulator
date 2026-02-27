@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createOrder, getProspectorOrders, getRationalistOrders } from '../agents';
+import { createOrder, getProspectorOrders, getRationalistOrders, getMeanRevertorOrders } from '../agents';
 import type { SimulationState, AgentState } from '../types';
 
 describe('createOrder utility', () => {
@@ -99,5 +99,55 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         expect(orders).toHaveLength(1);
         expect(orders[0].side).toBe(-1); // Ask
         expect(orders[0].price).toBeGreaterThan(100); // Asks above current price
+    });
+});
+
+describe('Mean Revertor Agent Strategy', () => {
+    const baseSimState: SimulationState = {
+        epoch: 0,
+        currentPrice: 100,
+        history: [100, 100, 100, 100, 100], // Stable history
+        wealthHistory: {},
+        logs: [],
+        isRunning: true,
+        playbackSpeedMs: 1000,
+        borrowRate: 0,
+        marginCallThreshold: 0
+    };
+
+    const meanRevertorState: AgentState = {
+        cash: 10000,
+        inventory: 0,
+        avgEntry: 0,
+        wealth: 10000,
+        params: { smaWindow: 5, zScoreThreshold: 2.0 }
+    };
+
+    it('buys when price is significantly below the mean (low Z-score)', () => {
+        // history [100, 100, 100, 100, 100] -> mean = 100, stdDev = 1 (fallback)
+        // currentPrice = 97 -> zScore = (97 - 100) / 1 = -3.0
+        // -3.0 < -zScoreThreshold (-2.0) -> Buy
+        const state = { ...baseSimState, currentPrice: 97 };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(1); // Buy
+    });
+
+    it('sells when price is significantly above the mean (high Z-score)', () => {
+        // history [100, 100, 100, 100, 100] -> mean = 100, stdDev = 1 (fallback)
+        // currentPrice = 103 -> zScore = (103 - 100) / 1 = 3.0
+        // 3.0 > zScoreThreshold (2.0) -> Sell
+        const state = { ...baseSimState, currentPrice: 103 };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(-1); // Sell
+    });
+
+    it('does nothing when Z-score is within threshold', () => {
+        // zScore = (101 - 100) / 1 = 1.0
+        // 1.0 < 2.0 -> No action
+        const state = { ...baseSimState, currentPrice: 101 };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(0);
     });
 });
