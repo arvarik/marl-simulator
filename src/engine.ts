@@ -5,36 +5,6 @@ export interface EngineResult {
     nextAgents: Record<string, AgentState>;
 }
 
-// Helper function for updating average entry
-const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
-    const isBuying = qty > 0;
-    const isLong = agent.inventory > 0;
-    const isShort = agent.inventory < 0;
-
-    agent.cash -= qty * price;
-
-    if (agent.inventory === 0) {
-        // Opening new position
-        agent.inventory = qty;
-        agent.avgEntry = price;
-    } else if ((isLong && isBuying) || (isShort && !isBuying)) {
-        // Adding to existing position
-        const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
-        agent.inventory += qty;
-        agent.avgEntry = totalCost / Math.abs(agent.inventory);
-    } else {
-        // Reducing existing position
-        agent.inventory += qty;
-        // If position flipped from long to short or short to long
-        if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
-            agent.avgEntry = price; // The flipped portion is at the new price
-        } else if (agent.inventory === 0) {
-            agent.avgEntry = 0;
-        }
-        // If just reduced but not flipped, avgEntry remains unchanged
-    }
-};
-
 /**
  * Pure function that processes a single epoch of the continuous double auction market.
  * It matches Bids and Asks, updates agent inventories, settles mark-to-market wealth,
@@ -47,10 +17,7 @@ export function processEpoch(
 ): EngineResult {
     const currentEpochLogs: AgentActionLog[] = [];
 
-    // Filter out invalid orders (quantity <= 0)
-    const validOrders = orders.filter(o => o.quantity > 0);
-
-    validOrders.forEach(o => {
+    orders.forEach(o => {
         currentEpochLogs.push({
             agentId: o.agentId,
             action: `Placed ${o.side === 1 ? 'Bid' : 'Ask'} for ${o.quantity} units at $${o.price.toFixed(2)}`
@@ -59,8 +26,8 @@ export function processEpoch(
 
     // Separate incoming orders into bids (side: 1) and asks (side: -1).
     // Sort: bids descending by price, asks ascending by price.
-    const bids = validOrders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
-    const asks = validOrders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
+    const bids = orders.filter(o => o.side === 1).map(o => ({ ...o })).sort((a, b) => b.price - a.price);
+    const asks = orders.filter(o => o.side === -1).map(o => ({ ...o })).sort((a, b) => a.price - b.price);
 
     let currentPrice = currentState.currentPrice;
 
@@ -70,13 +37,10 @@ export function processEpoch(
         nextAgents[key] = { ...agent };
     }
 
-    let bidIdx = 0;
-    let askIdx = 0;
-
-    // Match: While bids and asks exist and bids[bidIdx].price >= asks[askIdx].price
-    while (bidIdx < bids.length && askIdx < asks.length && bids[bidIdx].price >= asks[askIdx].price) {
-        const bid = bids[bidIdx];
-        const ask = asks[askIdx];
+    // Match: While bids and asks exist and bids[0].price >= asks[0].price
+    while (bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
+        const bid = bids[0];
+        const ask = asks[0];
 
         // Clear: clearing price is midpoint
         const clearingPrice = (bid.price + ask.price) / 2.0;
@@ -91,6 +55,36 @@ export function processEpoch(
             action: `Sold ${executedQuantity} units at $${clearingPrice.toFixed(2)}`
         });
 
+        // Helper function for updating average entry
+        const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
+            const isBuying = qty > 0;
+            const isLong = agent.inventory > 0;
+            const isShort = agent.inventory < 0;
+
+            agent.cash -= qty * price;
+
+            if (agent.inventory === 0) {
+                // Opening new position
+                agent.inventory = qty;
+                agent.avgEntry = price;
+            } else if ((isLong && isBuying) || (isShort && !isBuying)) {
+                // Adding to existing position
+                const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
+                agent.inventory += qty;
+                agent.avgEntry = totalCost / Math.abs(agent.inventory);
+            } else {
+                // Reducing existing position
+                agent.inventory += qty;
+                // If position flipped from long to short or short to long
+                if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
+                    agent.avgEntry = price; // The flipped portion is at the new price
+                } else if (agent.inventory === 0) {
+                    agent.avgEntry = 0;
+                }
+                // If just reduced but not flipped, avgEntry remains unchanged
+            }
+        };
+
         // Settle
         const buyer = nextAgents[bid.agentId];
         if (buyer) updateAgentPosition(buyer, executedQuantity, clearingPrice);
@@ -104,9 +98,9 @@ export function processEpoch(
         bid.quantity -= executedQuantity;
         ask.quantity -= executedQuantity;
 
-        // Move pointer if quantity reaches 0
-        if (bid.quantity <= 0) bidIdx++;
-        if (ask.quantity <= 0) askIdx++;
+        // Pop from array if quantity reaches 0
+        if (bid.quantity <= 0) bids.shift();
+        if (ask.quantity <= 0) asks.shift();
     }
 
     // Mark-to-Market wealth update, Borrow Fees, and Margin Calls
@@ -114,16 +108,21 @@ export function processEpoch(
     for (const id in nextAgents) {
         const agent = nextAgents[id];
 
-        // 1. Borrowing Cost & 2. Margin Call
+        // 1. Borrowing Cost (Interest on negative inventory value)
         if (agent.inventory < 0) {
             // Calculate the current value of the borrowed shares
             const borrowedValue = Math.abs(agent.inventory) * currentPrice;
-
             // Deduct interest from cash
             const interestFee = borrowedValue * currentState.borrowRate;
             agent.cash -= interestFee;
+        }
 
-            // Margin Call / Forced Liquidation
+        // Calculate intermediate wealth
+        agent.wealth = agent.cash + (agent.inventory * currentPrice);
+
+        // 2. Margin Call / Forced Liquidation
+        if (agent.inventory < 0) {
+            const borrowedValue = Math.abs(agent.inventory) * currentPrice;
             const maintenanceMargin = borrowedValue * currentState.marginCallThreshold;
 
             // If cash buffer drops below required maintenance margin, force liquidate!
@@ -133,10 +132,13 @@ export function processEpoch(
                     agentId: id,
                     action: `[MARGIN CALL] Liquidated ${Math.abs(agent.inventory)} units at $${currentPrice.toFixed(2)}`
                 });
-                // Cost to buy back the shares (which is exactly borrowedValue)
-                agent.cash -= borrowedValue;
+                // Cost to buy back the shares
+                const costToCover = Math.abs(agent.inventory) * currentPrice;
+                agent.cash -= costToCover;
                 agent.inventory = 0;
                 agent.avgEntry = 0;
+                // Recalculate wealth after forced liquidation
+                agent.wealth = agent.cash + (agent.inventory * currentPrice);
             }
         }
 
@@ -146,10 +148,6 @@ export function processEpoch(
         } else {
             nextWealthHistory[id] = [agent.wealth];
         }
-        // Calculate final wealth (Mark-to-Market)
-        agent.wealth = agent.cash + (agent.inventory * currentPrice);
-
-        nextWealthHistory[id] = [...(currentState.wealthHistory[id] || []), agent.wealth];
     }
 
     const newLog: EpochLog = {

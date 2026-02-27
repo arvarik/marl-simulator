@@ -85,7 +85,7 @@ export function SimulationDashboard() {
     const sortedAsks = orders.filter(o => o.side === -1).sort((a, b) => a.price - b.price).slice(0, 5);
 
     return { bids: sortedBids, asks: sortedAsks };
-  }, [store, agents]); // Update when epoch changes
+  }, [store, agents, epoch]); // Update when epoch changes
 
   return (
     <div className="flex flex-col gap-6 h-full overflow-hidden">

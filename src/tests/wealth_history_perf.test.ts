@@ -21,7 +21,7 @@ describe('Performance Benchmark: processEpoch Wealth History', () => {
         wealthHistory[id] = [10000];
     }
 
-    let currentState: SimulationState = {
+    const currentState: SimulationState = {
         epoch: 0,
         currentPrice: 100,
         history: [100],
