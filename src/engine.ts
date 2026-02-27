@@ -5,6 +5,36 @@ export interface EngineResult {
     nextAgents: Record<string, AgentState>;
 }
 
+// Helper function for updating average entry
+const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
+    const isBuying = qty > 0;
+    const isLong = agent.inventory > 0;
+    const isShort = agent.inventory < 0;
+
+    agent.cash -= qty * price;
+
+    if (agent.inventory === 0) {
+        // Opening new position
+        agent.inventory = qty;
+        agent.avgEntry = price;
+    } else if ((isLong && isBuying) || (isShort && !isBuying)) {
+        // Adding to existing position
+        const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
+        agent.inventory += qty;
+        agent.avgEntry = totalCost / Math.abs(agent.inventory);
+    } else {
+        // Reducing existing position
+        agent.inventory += qty;
+        // If position flipped from long to short or short to long
+        if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
+            agent.avgEntry = price; // The flipped portion is at the new price
+        } else if (agent.inventory === 0) {
+            agent.avgEntry = 0;
+        }
+        // If just reduced but not flipped, avgEntry remains unchanged
+    }
+};
+
 /**
  * Pure function that processes a single epoch of the continuous double auction market.
  * It matches Bids and Asks, updates agent inventories, settles mark-to-market wealth,
@@ -54,36 +84,6 @@ export function processEpoch(
             agentId: ask.agentId,
             action: `Sold ${executedQuantity} units at $${clearingPrice.toFixed(2)}`
         });
-
-        // Helper function for updating average entry
-        const updateAgentPosition = (agent: AgentState, qty: number, price: number) => {
-            const isBuying = qty > 0;
-            const isLong = agent.inventory > 0;
-            const isShort = agent.inventory < 0;
-
-            agent.cash -= qty * price;
-
-            if (agent.inventory === 0) {
-                // Opening new position
-                agent.inventory = qty;
-                agent.avgEntry = price;
-            } else if ((isLong && isBuying) || (isShort && !isBuying)) {
-                // Adding to existing position
-                const totalCost = (Math.abs(agent.inventory) * agent.avgEntry) + (Math.abs(qty) * price);
-                agent.inventory += qty;
-                agent.avgEntry = totalCost / Math.abs(agent.inventory);
-            } else {
-                // Reducing existing position
-                agent.inventory += qty;
-                // If position flipped from long to short or short to long
-                if ((isLong && agent.inventory < 0) || (isShort && agent.inventory > 0)) {
-                    agent.avgEntry = price; // The flipped portion is at the new price
-                } else if (agent.inventory === 0) {
-                    agent.avgEntry = 0;
-                }
-                // If just reduced but not flipped, avgEntry remains unchanged
-            }
-        };
 
         // Settle
         const buyer = nextAgents[bid.agentId];
