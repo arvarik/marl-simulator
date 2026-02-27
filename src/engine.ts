@@ -104,7 +104,7 @@ export function processEpoch(
     }
 
     // Mark-to-Market wealth update, Borrow Fees, and Margin Calls
-    const nextWealthHistory: Record<string, number[]> = {};
+    const nextWealthHistory: Record<string, number[]> = { ...currentState.wealthHistory };
     for (const id in nextAgents) {
         const agent = nextAgents[id];
 
@@ -142,7 +142,12 @@ export function processEpoch(
             }
         }
 
-        nextWealthHistory[id] = [...(currentState.wealthHistory[id] || []), agent.wealth];
+        // Optimization: Append to existing array to avoid quadratic copying
+        if (nextWealthHistory[id]) {
+            nextWealthHistory[id].push(agent.wealth);
+        } else {
+            nextWealthHistory[id] = [agent.wealth];
+        }
     }
 
     const newLog: EpochLog = {
