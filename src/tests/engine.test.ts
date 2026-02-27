@@ -56,4 +56,54 @@ describe('processEpoch Matching Engine', () => {
         expect(result.nextAgents['Seller'].inventory).toBe(-10);
         expect(result.nextAgents['Seller'].avgEntry).toBe(100);
     });
+
+    it('triggers margin call liquidation when agent cannot meet maintenance margin', () => {
+        // Setup specific state for margin call scenario
+        const marginCallState: SimulationState = {
+            ...baseSimState,
+            currentPrice: 25,
+            marginCallThreshold: 0.5, // 50% maintenance margin
+            borrowRate: 0 // No borrow fees to isolate margin logic
+        };
+
+        const marginAgents: Record<string, AgentState> = {
+            ShortSeller: {
+                cash: 100,
+                inventory: -10, // Short 10 units
+                avgEntry: 20, // Entered at 20 (now price is 25, so losing money)
+                wealth: 100 + (-10 * 25), // -150 wealth
+                params: {}
+            }
+        };
+
+        // Current Price: 25
+        // Borrowed Value: abs(-10) * 25 = 250
+        // Maintenance Margin: 250 * 0.5 = 125
+        // Cash: 100
+        // Since Cash (100) < Maintenance Margin (125), liquidation should occur.
+
+        const result = processEpoch(marginCallState, marginAgents, []);
+
+        const liquidatedAgent = result.nextAgents['ShortSeller'];
+
+        // 1. Inventory should be reset to 0
+        expect(liquidatedAgent.inventory).toBe(0);
+
+        // 2. Cash should be reduced by cost to cover
+        // Cost to cover = 10 * 25 = 250
+        // New Cash = 100 - 250 = -150
+        expect(liquidatedAgent.cash).toBe(-150);
+
+        // 3. Avg Entry should be 0
+        expect(liquidatedAgent.avgEntry).toBe(0);
+
+        // 4. Verify log entry
+        const logs = result.nextSimulationState.logs;
+        const currentEpochLogs = logs[0].actions;
+        const marginLog = currentEpochLogs.find(log => log.action.includes('[MARGIN CALL]'));
+
+        expect(marginLog).toBeDefined();
+        expect(marginLog?.agentId).toBe('ShortSeller');
+        expect(marginLog?.action).toContain('Liquidated 10 units at $25.00');
+    });
 });
