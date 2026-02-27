@@ -37,10 +37,13 @@ export function processEpoch(
         nextAgents[key] = { ...agent };
     }
 
-    // Match: While bids and asks exist and bids[0].price >= asks[0].price
-    while (bids.length > 0 && asks.length > 0 && bids[0].price >= asks[0].price) {
-        const bid = bids[0];
-        const ask = asks[0];
+    let bidIdx = 0;
+    let askIdx = 0;
+
+    // Match: While bids and asks exist and bids[bidIdx].price >= asks[askIdx].price
+    while (bidIdx < bids.length && askIdx < asks.length && bids[bidIdx].price >= asks[askIdx].price) {
+        const bid = bids[bidIdx];
+        const ask = asks[askIdx];
 
         // Clear: clearing price is midpoint
         const clearingPrice = (bid.price + ask.price) / 2.0;
@@ -98,9 +101,9 @@ export function processEpoch(
         bid.quantity -= executedQuantity;
         ask.quantity -= executedQuantity;
 
-        // Pop from array if quantity reaches 0
-        if (bid.quantity <= 0) bids.shift();
-        if (ask.quantity <= 0) asks.shift();
+        // Move pointer if quantity reaches 0
+        if (bid.quantity <= 0) bidIdx++;
+        if (ask.quantity <= 0) askIdx++;
     }
 
     // Mark-to-Market wealth update, Borrow Fees, and Margin Calls
