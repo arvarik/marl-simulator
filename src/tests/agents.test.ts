@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { createOrder, getProspectorOrders, getRationalistOrders } from '../agents';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { createOrder, getProspectorOrders, getRationalistOrders, getNoiseTraderOrders } from '../agents';
 import type { SimulationState, AgentState } from '../types';
 
 describe('createOrder utility', () => {
@@ -99,5 +99,87 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         expect(orders).toHaveLength(1);
         expect(orders[0].side).toBe(-1); // Ask
         expect(orders[0].price).toBeGreaterThan(100); // Asks above current price
+    });
+});
+
+describe('Noise Trader Agent Strategy', () => {
+    const baseSimState: SimulationState = {
+        epoch: 0,
+        currentPrice: 100,
+        history: [100],
+        wealthHistory: {},
+        logs: [],
+        isRunning: true,
+        playbackSpeedMs: 1000,
+        borrowRate: 0,
+        marginCallThreshold: 0
+    };
+
+    const noiseTraderState: AgentState = {
+        cash: 10000,
+        inventory: 0,
+        avgEntry: 0,
+        wealth: 10000,
+        params: { tradeProbability: 0.5, maxQuantity: 10 }
+    };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('returns no orders when random value exceeds trade probability', () => {
+        // Mock random to be > 0.5
+        vi.spyOn(Math, 'random').mockReturnValue(0.6);
+
+        const orders = getNoiseTraderOrders(baseSimState, noiseTraderState);
+        expect(orders).toHaveLength(0);
+    });
+
+    it('places a buy order correctly', () => {
+        const randomSpy = vi.spyOn(Math, 'random');
+        // Sequence of random calls:
+        // 1. tradeProbability check: 0.1 ( < 0.5, so it trades)
+        // 2. isBuy check: 0.6 ( > 0.5, so Buy)
+        // 3. slippage: 0.5 => result = 0.5 * 0.02 + 0.01 = 0.02 (2% slippage)
+        // 4. quantity: 0.8 => floor(0.8 * 10) + 1 = 9
+        randomSpy
+            .mockReturnValueOnce(0.1)
+            .mockReturnValueOnce(0.6)
+            .mockReturnValueOnce(0.5)
+            .mockReturnValueOnce(0.8);
+
+        const orders = getNoiseTraderOrders(baseSimState, noiseTraderState);
+        expect(orders).toHaveLength(1);
+
+        const order = orders[0];
+        expect(order.side).toBe(1); // Buy
+        // Price should be currentPrice * (1 + slippage) = 100 * 1.02 = 102
+        expect(order.price).toBeCloseTo(102);
+        expect(order.quantity).toBe(9);
+        expect(order.agentId).toBe('NoiseTrader');
+    });
+
+    it('places a sell order correctly', () => {
+        const randomSpy = vi.spyOn(Math, 'random');
+        // Sequence of random calls:
+        // 1. tradeProbability check: 0.1 ( < 0.5, so it trades)
+        // 2. isBuy check: 0.4 ( <= 0.5, so Sell)
+        // 3. slippage: 0.0 => result = 0.0 * 0.02 + 0.01 = 0.01 (1% slippage)
+        // 4. quantity: 0.0 => floor(0.0 * 10) + 1 = 1
+        randomSpy
+            .mockReturnValueOnce(0.1)
+            .mockReturnValueOnce(0.4)
+            .mockReturnValueOnce(0.0)
+            .mockReturnValueOnce(0.0);
+
+        const orders = getNoiseTraderOrders(baseSimState, noiseTraderState);
+        expect(orders).toHaveLength(1);
+
+        const order = orders[0];
+        expect(order.side).toBe(-1); // Sell
+        // Price should be currentPrice * (1 - slippage) = 100 * 0.99 = 99
+        expect(order.price).toBeCloseTo(99);
+        expect(order.quantity).toBe(1);
+        expect(order.agentId).toBe('NoiseTrader');
     });
 });
