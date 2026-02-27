@@ -33,7 +33,19 @@ const initialAgents: Record<string, AgentState> = {
   Momentum: { cash: 10000, inventory: 0, avgEntry: 0, wealth: 10000, params: { lookbackWindow: 5, threshold: 2 } },
   MeanRevertor: { cash: 10000, inventory: 0, avgEntry: 0, wealth: 10000, params: { smaWindow: 10, zScoreThreshold: 1.5 } },
   MarketMaker: { cash: 10000, inventory: 0, avgEntry: 0, wealth: 10000, params: { gamma: 0.1, spreadWidth: 2 } },
-  NoiseTrader: { cash: 10000, inventory: 0, avgEntry: 0, wealth: 10000, params: { tradeProbability: 1.0, maxQuantity: 3 } },
+  NoiseTrader: {
+    cash: 10000,
+    inventory: 0,
+    avgEntry: 0,
+    wealth: 10000,
+    params: {
+      tradeProbability: 1.0,
+      maxQuantity: 3,
+      buyThreshold: 0.5,
+      minSlippage: 0.01,
+      slippageWidth: 0.02
+    }
+  },
 };
 
 /**

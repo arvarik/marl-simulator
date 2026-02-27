@@ -161,15 +161,22 @@ export const getMarketMakerOrders = (marketState: SimulationState, internalState
 export const getNoiseTraderOrders = (marketState: SimulationState, internalState: AgentState): Order[] => {
   const { currentPrice } = marketState;
   const { params } = internalState;
-  const { tradeProbability, maxQuantity } = params;
+  // Default values ensure backward compatibility if params are missing
+  const {
+    tradeProbability,
+    maxQuantity,
+    buyThreshold = 0.5,
+    minSlippage = 0.01,
+    slippageWidth = 0.02
+  } = params;
 
   if (Math.random() > tradeProbability) return [];
 
   // Inject random 'Noise Traders' (External Retail) to simulate market-takers crossing the spread.
-  const isBuy = Math.random() > 0.5;
-  // Simulate a realistic market order crossing the spread with enough slippage (1% to 3%) 
+  const isBuy = Math.random() > buyThreshold;
+  // Simulate a realistic market order crossing the spread with enough slippage (e.g. 1% to 3%)
   // to ensure it overcomes the Market Maker's default spread.
-  const slippage = (Math.random() * 0.02) + 0.01;
+  const slippage = (Math.random() * slippageWidth) + minSlippage;
   const noisePrice = isBuy ? currentPrice * (1 + slippage) : currentPrice * (1 - slippage);
   const noiseQty = Math.floor(Math.random() * maxQuantity) + 1;
 

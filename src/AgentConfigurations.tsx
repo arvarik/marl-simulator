@@ -83,6 +83,8 @@ export function AgentConfigurations() {
       params: [
         { name: 'tradeProbability', label: 'Trade Probability', min: 0.0, max: 1.0, step: 0.05, tooltip: 'Low: Rarely trades, market may stall. High: Spams the market with orders, creating high baseline volatility.' },
         { name: 'maxQuantity', label: 'Max Quantity', min: 1, max: 10, step: 1, tooltip: 'Low: Trades tiny amounts. High: Drops massive, unpredictable market orders that chew through liquidity.' },
+        { name: 'minSlippage', label: 'Min Slippage', min: 0.0, max: 0.1, step: 0.005, tooltip: 'Minimum percent price is moved away from mid-price (spread crossing).' },
+        { name: 'slippageWidth', label: 'Slippage Width', min: 0.0, max: 0.1, step: 0.005, tooltip: 'Range of additional random slippage added to the minimum.' },
       ]
     }
   ];
