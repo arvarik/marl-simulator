@@ -24,7 +24,8 @@ describe('Rationalist Agent Strategy', () => {
         isRunning: true,
         playbackSpeedMs: 1000,
         borrowRate: 0,
-        marginCallThreshold: 0
+        marginCallThreshold: 0,
+        currentOrders: []
     };
 
     const rationalistState: AgentState = {
@@ -66,7 +67,8 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         isRunning: true,
         playbackSpeedMs: 1000,
         borrowRate: 0,
-        marginCallThreshold: 0
+        marginCallThreshold: 0,
+        currentOrders: []
     };
 
     it('risk-seeking in losses: averages down when long and PnL is negative', () => {

@@ -1,7 +1,7 @@
 import type { AgentState, SimulationState, Order, AgentActionLog, EpochLog } from './types';
 
 export interface EngineResult {
-    nextSimulationState: Omit<SimulationState, 'isRunning' | 'playbackSpeedMs' | 'borrowRate' | 'marginCallThreshold'>;
+    nextSimulationState: Omit<SimulationState, 'isRunning' | 'playbackSpeedMs' | 'borrowRate' | 'marginCallThreshold' | 'currentOrders'>;
     nextAgents: Record<string, AgentState>;
 }
 

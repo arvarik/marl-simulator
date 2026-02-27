@@ -72,4 +72,6 @@ export interface SimulationState {
   borrowRate: number;
   /** The margin requirement percentage. If an agent's cash drops below this threshold of their short value, they are liquidated. */
   marginCallThreshold: number;
+  /** The current set of pending orders for the *next* epoch, generated based on the current state. */
+  currentOrders: Order[];
 }

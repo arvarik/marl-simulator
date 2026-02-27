@@ -3,7 +3,6 @@ import { useStore } from './store';
 import { Play, Pause, StepForward, RotateCcw, BookOpen, Activity, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, BookA } from 'lucide-react';
 import { cn } from './utils';
 import { AgentConfigurations } from './AgentConfigurations';
-import { getAllAgentOrders } from './agents';
 import { SimulationDashboard } from './SimulationDashboard';
 import { ScenarioDeck } from './ScenarioDeck';
 import { QuantAcademy } from './QuantAcademy';
@@ -17,10 +16,7 @@ function App() {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
 
   const handleStepEpoch = () => {
-    // Current state from store object since we destructured it
-    const currentState = useStore.getState();
-    const orders = getAllAgentOrders(currentState, currentState.agents);
-    useStore.getState().stepEpoch(orders);
+    useStore.getState().stepEpoch();
   };
 
   useEffect(() => {

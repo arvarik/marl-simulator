@@ -15,7 +15,8 @@ describe('processEpoch Matching Engine', () => {
         isRunning: true,
         playbackSpeedMs: 1000,
         borrowRate: 0,
-        marginCallThreshold: 0.2
+        marginCallThreshold: 0.2,
+        currentOrders: []
     };
 
     const baseAgents: Record<string, AgentState> = {

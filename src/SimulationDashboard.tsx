@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useStore } from './store';
-import { getAllAgentOrders } from './agents';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts';
@@ -80,12 +79,12 @@ export function SimulationDashboard() {
 
   // 3. Market Depth / LOB (Top 5 Bids and Asks)
   const { bids, asks } = useMemo(() => {
-    const orders = getAllAgentOrders(store, agents);
+    const orders = store.currentOrders;
     const sortedBids = orders.filter(o => o.side === 1).sort((a, b) => b.price - a.price).slice(0, 5);
     const sortedAsks = orders.filter(o => o.side === -1).sort((a, b) => a.price - b.price).slice(0, 5);
 
     return { bids: sortedBids, asks: sortedAsks };
-  }, [store, agents, epoch]); // Update when epoch changes
+  }, [store.currentOrders]); // Update when orders change
 
   return (
     <div className="flex flex-col gap-6 h-full overflow-hidden">
