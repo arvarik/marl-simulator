@@ -114,21 +114,16 @@ export function processEpoch(
     for (const id in nextAgents) {
         const agent = nextAgents[id];
 
-        // 1. Borrowing Cost (Interest on negative inventory value)
+        // 1. Borrowing Cost & 2. Margin Call
         if (agent.inventory < 0) {
             // Calculate the current value of the borrowed shares
             const borrowedValue = Math.abs(agent.inventory) * currentPrice;
+
             // Deduct interest from cash
             const interestFee = borrowedValue * currentState.borrowRate;
             agent.cash -= interestFee;
-        }
 
-        // Calculate intermediate wealth
-        agent.wealth = agent.cash + (agent.inventory * currentPrice);
-
-        // 2. Margin Call / Forced Liquidation
-        if (agent.inventory < 0) {
-            const borrowedValue = Math.abs(agent.inventory) * currentPrice;
+            // Margin Call / Forced Liquidation
             const maintenanceMargin = borrowedValue * currentState.marginCallThreshold;
 
             // If cash buffer drops below required maintenance margin, force liquidate!
@@ -138,15 +133,15 @@ export function processEpoch(
                     agentId: id,
                     action: `[MARGIN CALL] Liquidated ${Math.abs(agent.inventory)} units at $${currentPrice.toFixed(2)}`
                 });
-                // Cost to buy back the shares
-                const costToCover = Math.abs(agent.inventory) * currentPrice;
-                agent.cash -= costToCover;
+                // Cost to buy back the shares (which is exactly borrowedValue)
+                agent.cash -= borrowedValue;
                 agent.inventory = 0;
                 agent.avgEntry = 0;
-                // Recalculate wealth after forced liquidation
-                agent.wealth = agent.cash + (agent.inventory * currentPrice);
             }
         }
+
+        // Calculate final wealth (Mark-to-Market)
+        agent.wealth = agent.cash + (agent.inventory * currentPrice);
 
         nextWealthHistory[id] = [...(currentState.wealthHistory[id] || []), agent.wealth];
     }
