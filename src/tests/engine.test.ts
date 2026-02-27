@@ -56,4 +56,159 @@ describe('processEpoch Matching Engine', () => {
         expect(result.nextAgents['Seller'].inventory).toBe(-10);
         expect(result.nextAgents['Seller'].avgEntry).toBe(100);
     });
+
+    describe('Position Management & Flipping', () => {
+        const flipSimState: SimulationState = {
+            ...baseSimState,
+            wealthHistory: { Subject: [10000], Counterparty: [10000] }
+        };
+
+        it('flips position from Long to Short correctly', () => {
+            const initialAgents: Record<string, AgentState> = {
+                Subject: {
+                    cash: 5000,
+                    inventory: 10, // Long 10
+                    avgEntry: 100,
+                    wealth: 6000,
+                    params: {}
+                },
+                Counterparty: {
+                    cash: 10000,
+                    inventory: 0,
+                    avgEntry: 0,
+                    wealth: 10000,
+                    params: {}
+                }
+            };
+
+            // Subject sells 20 units at 110. Counterparty buys 20 units at 110.
+            // Expected: Subject goes from +10 to -10.
+            // The first 10 units cover the existing position (Profit: (110-100)*10 = 100).
+            // The remaining 10 units open a new short position at 110.
+            // New AvgEntry should be 110.
+
+            const orders: Order[] = [
+                { agentId: 'Subject', price: 110, quantity: 20, side: -1 },
+                { agentId: 'Counterparty', price: 110, quantity: 20, side: 1 }
+            ];
+
+            const result = processEpoch(flipSimState, initialAgents, orders);
+
+            const subject = result.nextAgents['Subject'];
+            expect(subject.inventory).toBe(-10);
+            expect(subject.avgEntry).toBe(110);
+
+            // Cash check:
+            // Started with 5000.
+            // Sold 20 @ 110 = +2200.
+            // Cash = 7200.
+            expect(subject.cash).toBe(7200);
+        });
+
+        it('flips position from Short to Long correctly', () => {
+            const initialAgents: Record<string, AgentState> = {
+                Subject: {
+                    cash: 15000,
+                    inventory: -10, // Short 10
+                    avgEntry: 100,
+                    wealth: 14000,
+                    params: {}
+                },
+                Counterparty: {
+                    cash: 10000,
+                    inventory: 20,
+                    avgEntry: 100,
+                    wealth: 12000,
+                    params: {}
+                }
+            };
+
+            // Subject buys 20 units at 90. Counterparty sells 20 units at 90.
+            // Expected: Subject goes from -10 to +10.
+            // The first 10 units cover the short (Profit: (100-90)*10 = 100).
+            // The remaining 10 units open a new long position at 90.
+            // New AvgEntry should be 90.
+
+            const orders: Order[] = [
+                { agentId: 'Subject', price: 90, quantity: 20, side: 1 },
+                { agentId: 'Counterparty', price: 90, quantity: 20, side: -1 }
+            ];
+
+            const result = processEpoch(flipSimState, initialAgents, orders);
+
+            const subject = result.nextAgents['Subject'];
+            expect(subject.inventory).toBe(10);
+            expect(subject.avgEntry).toBe(90);
+
+            // Cash check:
+            // Started with 15000.
+            // Bought 20 @ 90 = -1800.
+            // Cash = 13200.
+            expect(subject.cash).toBe(13200);
+        });
+
+        it('handles exact position close (to zero)', () => {
+            const initialAgents: Record<string, AgentState> = {
+                Subject: {
+                    cash: 5000,
+                    inventory: 10, // Long 10
+                    avgEntry: 100,
+                    wealth: 6000,
+                    params: {}
+                },
+                Counterparty: {
+                    cash: 10000,
+                    inventory: 0,
+                    avgEntry: 0,
+                    wealth: 10000,
+                    params: {}
+                }
+            };
+
+            // Subject sells 10 units at 110.
+            const orders: Order[] = [
+                { agentId: 'Subject', price: 110, quantity: 10, side: -1 },
+                { agentId: 'Counterparty', price: 110, quantity: 10, side: 1 }
+            ];
+
+            const result = processEpoch(flipSimState, initialAgents, orders);
+
+            const subject = result.nextAgents['Subject'];
+            expect(subject.inventory).toBe(0);
+            expect(subject.avgEntry).toBe(0);
+            expect(subject.cash).toBe(5000 + 1100); // 6100
+        });
+
+        it('handles partial reduction without flipping', () => {
+            const initialAgents: Record<string, AgentState> = {
+                Subject: {
+                    cash: 5000,
+                    inventory: 10, // Long 10
+                    avgEntry: 100,
+                    wealth: 6000,
+                    params: {}
+                },
+                Counterparty: {
+                    cash: 10000,
+                    inventory: 0,
+                    avgEntry: 0,
+                    wealth: 10000,
+                    params: {}
+                }
+            };
+
+            // Subject sells 5 units at 110.
+            const orders: Order[] = [
+                { agentId: 'Subject', price: 110, quantity: 5, side: -1 },
+                { agentId: 'Counterparty', price: 110, quantity: 5, side: 1 }
+            ];
+
+            const result = processEpoch(flipSimState, initialAgents, orders);
+
+            const subject = result.nextAgents['Subject'];
+            expect(subject.inventory).toBe(5);
+            expect(subject.avgEntry).toBe(100); // AvgEntry should not change on reduction
+            expect(subject.cash).toBe(5000 + 550); // 5550
+        });
+    });
 });
