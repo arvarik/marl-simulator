@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createOrder, getProspectorOrders, getRationalistOrders } from '../agents';
+import { createOrder, getProspectorOrders, getRationalistOrders, getMarketMakerOrders } from '../agents';
 import type { SimulationState, AgentState } from '../types';
 
 describe('createOrder utility', () => {
@@ -99,5 +99,81 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         expect(orders).toHaveLength(1);
         expect(orders[0].side).toBe(-1); // Ask
         expect(orders[0].price).toBeGreaterThan(100); // Asks above current price
+    });
+});
+
+describe('Market Maker Strategy', () => {
+    const baseSimState: SimulationState = {
+        epoch: 0,
+        currentPrice: 100,
+        history: [100],
+        wealthHistory: {},
+        logs: [],
+        isRunning: true,
+        playbackSpeedMs: 1000,
+        borrowRate: 0,
+        marginCallThreshold: 0
+    };
+
+    const marketMakerState: AgentState = {
+        cash: 10000,
+        inventory: 0,
+        avgEntry: 0,
+        wealth: 10000,
+        params: { gamma: 0.1, spreadWidth: 2 } // gamma controls inventory skew, spreadWidth controls bid-ask spread
+    };
+
+    it('neutral inventory: centers quotes around current price', () => {
+        const orders = getMarketMakerOrders(baseSimState, marketMakerState);
+        expect(orders).toHaveLength(2);
+
+        // Reservation price = 100 - (0.1 * 0) = 100
+        // Bid = 100 - (2/2) = 99
+        // Ask = 100 + (2/2) = 101
+
+        const bid = orders.find(o => o.side === 1);
+        const ask = orders.find(o => o.side === -1);
+
+        expect(bid?.price).toBe(99);
+        expect(ask?.price).toBe(101);
+    });
+
+    it('positive inventory: skews quotes lower to encourage selling', () => {
+        const state = { ...marketMakerState, inventory: 10 };
+        // Reservation price = 100 - (0.1 * 10) = 99
+        // Bid = 99 - 1 = 98
+        // Ask = 99 + 1 = 100
+
+        const orders = getMarketMakerOrders(baseSimState, state);
+        const bid = orders.find(o => o.side === 1);
+        const ask = orders.find(o => o.side === -1);
+
+        expect(bid?.price).toBe(98);
+        expect(ask?.price).toBe(100);
+    });
+
+    it('negative inventory: skews quotes higher to encourage buying', () => {
+        const state = { ...marketMakerState, inventory: -10 };
+        // Reservation price = 100 - (0.1 * -10) = 101
+        // Bid = 101 - 1 = 100
+        // Ask = 101 + 1 = 102
+
+        const orders = getMarketMakerOrders(baseSimState, state);
+        const bid = orders.find(o => o.side === 1);
+        const ask = orders.find(o => o.side === -1);
+
+        expect(bid?.price).toBe(100);
+        expect(ask?.price).toBe(102);
+    });
+
+    it('returns correct order structure', () => {
+        const orders = getMarketMakerOrders(baseSimState, marketMakerState);
+        expect(orders).toHaveLength(2);
+        orders.forEach(order => {
+            expect(order.agentId).toBe('MarketMaker');
+            expect(order.quantity).toBe(5);
+        });
+        expect(orders.some(o => o.side === 1)).toBe(true);
+        expect(orders.some(o => o.side === -1)).toBe(true);
     });
 });
