@@ -3,6 +3,11 @@ import type { AgentState, SimulationState, Order } from './types';
 import { processEpoch } from './engine';
 
 /**
+ * Helper type to extract keys from a type T whose values are of type V.
+ */
+type KeysMatching<T, V> = { [K in keyof T]-?: T[K] extends V ? K : never }[keyof T];
+
+/**
  * The unified global state, combining simulation properties, agent states, and state-mutating actions.
  */
 interface GlobalState extends SimulationState {
@@ -13,7 +18,7 @@ interface GlobalState extends SimulationState {
   /** Toggles the running state of the automated simulation loop. */
   toggleSimulation: () => void;
   /** Updates a specific parameter of the simulation state. */
-  updateSimulationParam: (paramName: keyof SimulationState, value: number) => void;
+  updateSimulationParam: (paramName: KeysMatching<SimulationState, number>, value: number) => void;
   /** Advances the simulation by one epoch, processing the given orders. */
   stepEpoch: (orders: Order[]) => void;
   /** Resets the simulation and all agents to their initial state. */
@@ -64,9 +69,9 @@ export const useStore = create<GlobalState>((set) => ({
 
   toggleSimulation: () => set((state) => ({ isRunning: !state.isRunning })),
 
-  updateSimulationParam: (paramName: keyof SimulationState, value: number) => set(() => ({
+  updateSimulationParam: (paramName: KeysMatching<SimulationState, number>, value: number) => set(() => ({
     [paramName]: value
-  })),
+  } as Partial<SimulationState>)),
 
   stepEpoch: (orders: Order[]) => set((state) => {
     const { nextSimulationState, nextAgents } = processEpoch(state, state.agents, orders);
