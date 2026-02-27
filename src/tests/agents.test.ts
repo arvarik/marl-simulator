@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createOrder, getProspectorOrders, getRationalistOrders } from '../agents';
+import { createOrder, getProspectorOrders, getRationalistOrders, getMeanRevertorOrders } from '../agents';
 import type { SimulationState, AgentState } from '../types';
 
 describe('createOrder utility', () => {
@@ -99,5 +99,71 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         expect(orders).toHaveLength(1);
         expect(orders[0].side).toBe(-1); // Ask
         expect(orders[0].price).toBeGreaterThan(100); // Asks above current price
+    });
+});
+
+describe('Mean Revertor Agent Strategy', () => {
+    const baseSimState: SimulationState = {
+        epoch: 0,
+        currentPrice: 100,
+        history: [], // Will be populated in tests
+        wealthHistory: {},
+        logs: [],
+        isRunning: true,
+        playbackSpeedMs: 1000,
+        borrowRate: 0,
+        marginCallThreshold: 0
+    };
+
+    const meanRevertorState: AgentState = {
+        cash: 10000,
+        inventory: 0,
+        avgEntry: 0,
+        wealth: 10000,
+        params: { smaWindow: 5, zScoreThreshold: 2.0 }
+    };
+
+    it('returns empty orders if history is insufficient', () => {
+        const state = { ...baseSimState, history: [100] };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(0);
+    });
+
+    it('sells when price is significantly above the mean (Z-Score > threshold)', () => {
+        // Mean = 100, StdDev ~ 0 (fallback to 1). Current Price = 105. Z = 5.
+        const state = {
+            ...baseSimState,
+            history: [100, 100, 100, 100, 100],
+            currentPrice: 105
+        };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(-1); // Sell
+        expect(orders[0].agentId).toBe('MeanRevertor');
+    });
+
+    it('buys when price is significantly below the mean (Z-Score < -threshold)', () => {
+        // Mean = 100, StdDev ~ 0 (fallback to 1). Current Price = 95. Z = -5.
+        const state = {
+            ...baseSimState,
+            history: [100, 100, 100, 100, 100],
+            currentPrice: 95
+        };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(1); // Buy
+        expect(orders[0].agentId).toBe('MeanRevertor');
+    });
+
+    it('does nothing when price is within the threshold', () => {
+        // Mean = 100, StdDev ~ 0 (fallback to 1). Current Price = 101. Z = 1.
+        // Threshold is 2.0.
+        const state = {
+            ...baseSimState,
+            history: [100, 100, 100, 100, 100],
+            currentPrice: 101
+        };
+        const orders = getMeanRevertorOrders(state, meanRevertorState);
+        expect(orders).toHaveLength(0);
     });
 });
