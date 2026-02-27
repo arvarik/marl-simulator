@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createOrder, getProspectorOrders, getRationalistOrders } from '../agents';
+import { createOrder, getProspectorOrders, getRationalistOrders, getMomentumOrders } from '../agents';
 import type { SimulationState, AgentState } from '../types';
 
 describe('createOrder utility', () => {
@@ -99,5 +99,93 @@ describe('Prospector Agent Strategy (Kahneman-Tversky)', () => {
         expect(orders).toHaveLength(1);
         expect(orders[0].side).toBe(-1); // Ask
         expect(orders[0].price).toBeGreaterThan(100); // Asks above current price
+    });
+});
+
+describe('Momentum Agent Strategy', () => {
+    const baseSimState: SimulationState = {
+        epoch: 10,
+        currentPrice: 100,
+        history: [100, 101, 102, 103, 104, 105, 100], // Example history
+        wealthHistory: {},
+        logs: [],
+        isRunning: true,
+        playbackSpeedMs: 1000,
+        borrowRate: 0,
+        marginCallThreshold: 0
+    };
+
+    const momentumState: AgentState = {
+        cash: 10000,
+        inventory: 0,
+        avgEntry: 0,
+        wealth: 10000,
+        params: { lookbackWindow: 5, threshold: 2 }
+    };
+
+    it('buys when price momentum is positive and exceeds threshold', () => {
+        // history length is 7. lookbackWindow is 5.
+        // k = min(5, 6) = 5.
+        // pastPrice index = 7 - 1 - 5 = 1.
+        // history[1] = 100 (if history is [90, 100, ...])
+
+        // Let's construct a specific state for clarity
+        const history = [100, 100, 100, 100, 100, 100];
+        // We want pastPrice (index 0 for lookback 5) to be 100.
+        // currentPrice 110.
+        // derivative = 110 - 100 = 10 > threshold 2.
+
+        const state = {
+            ...baseSimState,
+            currentPrice: 110,
+            history: [100, 100, 100, 100, 100, 100] // history length 6. index 5 is last element.
+        };
+        // k = min(5, 5) = 5.
+        // pastPrice = history[6 - 1 - 5] = history[0] = 100.
+
+        const orders = getMomentumOrders(state, momentumState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(1); // Buy
+        expect(orders[0].price).toBeGreaterThan(110); // Aggressive buy
+    });
+
+    it('sells when price momentum is negative and exceeds threshold', () => {
+        // currentPrice 90. pastPrice 100. derivative = -10 < -2.
+        const state = {
+            ...baseSimState,
+            currentPrice: 90,
+            history: [100, 100, 100, 100, 100, 100]
+        };
+
+        const orders = getMomentumOrders(state, momentumState);
+        expect(orders).toHaveLength(1);
+        expect(orders[0].side).toBe(-1); // Sell
+        expect(orders[0].price).toBeLessThan(90); // Aggressive sell
+    });
+
+    it('holds when price momentum is within threshold', () => {
+        // currentPrice 101. pastPrice 100. derivative = 1. Not > 2.
+        const state = {
+            ...baseSimState,
+            currentPrice: 101,
+            history: [100, 100, 100, 100, 100, 100]
+        };
+
+        const orders = getMomentumOrders(state, momentumState);
+        expect(orders).toHaveLength(0);
+    });
+
+    it('does nothing if history is insufficient', () => {
+        const state = {
+            ...baseSimState,
+            currentPrice: 100,
+            history: [100] // Length 1
+        };
+        // lookbackWindow 5.
+        // k = min(5, 0) = 0.
+        // Should return [].
+
+        const orders = getMomentumOrders(state, momentumState);
+        expect(orders).toHaveLength(0);
     });
 });
